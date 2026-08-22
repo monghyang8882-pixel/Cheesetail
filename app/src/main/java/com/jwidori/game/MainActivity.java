@@ -19,12 +19,16 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.jwidori.game.model.Card;
+import com.jwidori.game.model.GameEngine;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,6 +39,7 @@ public class MainActivity extends Activity {
     private static final int STATE_HOME = 0;
     private static final int STATE_LOBBY = 1;
     private static final int STATE_WAITING = 2;
+    private static final int STATE_GAME = 3;
 
     private FrameLayout root;
     private ImageView screenImage;
@@ -44,6 +49,8 @@ public class MainActivity extends Activity {
     private int state = STATE_HOME;
     private int lastLobbyIndex = -1;
     private int currentLobbyIndex = -1;
+    private GameEngine gameEngine;
+    private boolean botTurnScheduled = false;
 
     private final int[] lobbyImages = new int[] {
             R.drawable.lobby_01,
@@ -84,6 +91,8 @@ public class MainActivity extends Activity {
     }
 
     private void clearOverlayViews() {
+        handler.removeCallbacksAndMessages(null);
+        botTurnScheduled = false;
         while (root.getChildCount() > 1) {
             root.removeViewAt(1);
         }
@@ -91,20 +100,17 @@ public class MainActivity extends Activity {
 
     private void showHome() {
         state = STATE_HOME;
+        gameEngine = null;
         clearOverlayViews();
+        screenImage.setScaleType(ImageView.ScaleType.FIT_XY);
         screenImage.setImageResource(R.drawable.home_main);
 
-        // 큰 '게임 시작' 버튼
-        addHotspot(0.20f, 0.49f, 0.60f, 0.11f, new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                showRandomLobby();
-            }
-        });
+        addHotspot(0.20f, 0.49f, 0.60f, 0.11f, v -> showRandomLobby());
     }
 
     private void showRandomLobby() {
         state = STATE_LOBBY;
+        gameEngine = null;
         clearOverlayViews();
 
         int idx;
@@ -118,39 +124,28 @@ public class MainActivity extends Activity {
 
         lastLobbyIndex = idx;
         currentLobbyIndex = idx;
+        screenImage.setScaleType(ImageView.ScaleType.FIT_XY);
         screenImage.setImageResource(lobbyImages[idx]);
         attachLobbyHotspots();
     }
 
     private void showCurrentLobby() {
         state = STATE_LOBBY;
+        gameEngine = null;
         clearOverlayViews();
         if (currentLobbyIndex < 0) {
             showRandomLobby();
             return;
         }
+        screenImage.setScaleType(ImageView.ScaleType.FIT_XY);
         screenImage.setImageResource(lobbyImages[currentLobbyIndex]);
         attachLobbyHotspots();
     }
 
     private void attachLobbyHotspots() {
-        // 방 만들기
-        addHotspot(0.15f, 0.57f, 0.70f, 0.11f, new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                showCreateRoomDialog();
-            }
-        });
+        addHotspot(0.15f, 0.57f, 0.70f, 0.11f, v -> showCreateRoomDialog());
+        addHotspot(0.15f, 0.72f, 0.70f, 0.11f, v -> startAutoMatch());
 
-        // 자동 매칭
-        addHotspot(0.15f, 0.72f, 0.70f, 0.11f, new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                startAutoMatch();
-            }
-        });
-
-        // 우편 / 공지 / 설정
         addHotspot(0.015f, 0.015f, 0.12f, 0.08f, v -> toast("우편함은 다음 단계에서 연결됩니다."));
         addHotspot(0.14f, 0.015f, 0.14f, 0.08f, v -> toast("공지사항은 다음 단계에서 연결됩니다."));
         addHotspot(0.86f, 0.015f, 0.12f, 0.08f, v -> toast("설정은 다음 단계에서 연결됩니다."));
@@ -246,7 +241,6 @@ public class MainActivity extends Activity {
             w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
             w.setDimAmount(0.45f);
             w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-            w.setLayout((int) (getResources().getDisplayMetrics().widthPixels * 0.88f), WindowManager.LayoutParams.WRAP_CONTENT);
         }
 
         cancel.setOnClickListener(v -> dialog.dismiss());
@@ -400,9 +394,7 @@ public class MainActivity extends Activity {
             start.setAlpha(1f);
         });
 
-        start.setOnClickListener(v -> {
-            toast("매치가 시작됩니다. 실제 카드 게임 화면은 다음 단계에서 연결합니다.");
-        });
+        start.setOnClickListener(v -> startLocalGame(maxPlayers));
 
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                 (int) (getResources().getDisplayMetrics().widthPixels * 0.88f),
@@ -410,6 +402,272 @@ public class MainActivity extends Activity {
         );
         lp.gravity = Gravity.CENTER;
         root.addView(card, lp);
+    }
+
+    private void startLocalGame(int playerCount) {
+        state = STATE_GAME;
+        clearOverlayViews();
+        gameEngine = new GameEngine(playerCount, 7, random);
+        renderGameScreen();
+        scheduleBotTurnIfNeeded();
+    }
+
+    private void renderGameScreen() {
+        if (state != STATE_GAME || gameEngine == null) {
+            return;
+        }
+        clearGameOverlayOnly();
+
+        GradientDrawable background = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[] {Color.rgb(219, 244, 244), Color.rgb(255, 241, 208), Color.rgb(255, 226, 218)}
+        );
+        screenImage.setScaleType(ImageView.ScaleType.FIT_XY);
+        screenImage.setImageDrawable(background);
+
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setGravity(Gravity.CENTER_HORIZONTAL);
+        page.setPadding(dp(12), dp(16), dp(12), dp(12));
+
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+
+        Button back = makeButton("← 로비", Color.rgb(255, 248, 230), Color.rgb(91, 58, 39));
+        back.setOnClickListener(v -> showCurrentLobby());
+        header.addView(back, new LinearLayout.LayoutParams(dp(82), dp(44)));
+
+        TextView gameTitle = makeText("치즈테일 카드게임", 22, Color.rgb(92, 52, 31), true);
+        gameTitle.setGravity(Gravity.CENTER);
+        header.addView(gameTitle, new LinearLayout.LayoutParams(0, dp(44), 1f));
+
+        TextView pile = makeText("더미 " + gameEngine.getDrawPileCount(), 13, Color.rgb(100, 75, 55), true);
+        pile.setGravity(Gravity.CENTER);
+        header.addView(pile, new LinearLayout.LayoutParams(dp(72), dp(44)));
+        page.addView(header, matchWrapMargins(0, 0, 0, 8));
+
+        LinearLayout opponents = new LinearLayout(this);
+        opponents.setOrientation(LinearLayout.HORIZONTAL);
+        opponents.setGravity(Gravity.CENTER);
+        for (int p = 1; p < gameEngine.getPlayerCount(); p++) {
+            TextView opponent = makeText(
+                    "🐭 P" + (p + 1) + "\n" + gameEngine.getHandSize(p) + "장",
+                    15,
+                    Color.rgb(83, 62, 48),
+                    gameEngine.getCurrentPlayer() == p
+            );
+            opponent.setGravity(Gravity.CENTER);
+            opponent.setPadding(dp(8), dp(8), dp(8), dp(8));
+            int fill = gameEngine.getCurrentPlayer() == p ? Color.rgb(255, 230, 151) : Color.argb(230, 255, 252, 244);
+            opponent.setBackground(roundedDrawable(fill, Color.rgb(223, 180, 114), 16, 1));
+            LinearLayout.LayoutParams oppLp = new LinearLayout.LayoutParams(0, dp(72), 1f);
+            oppLp.setMargins(dp(3), 0, dp(3), 0);
+            opponents.addView(opponent, oppLp);
+        }
+        page.addView(opponents, matchWrapMargins(0, 0, 0, 12));
+
+        TextView turn = makeText(
+                gameEngine.getCurrentPlayer() == 0 ? "내 차례야 찍!" : "P" + (gameEngine.getCurrentPlayer() + 1) + " 차례…",
+                19,
+                Color.rgb(110, 65, 49),
+                true
+        );
+        turn.setGravity(Gravity.CENTER);
+        page.addView(turn, matchWrapMargins(0, 0, 0, 10));
+
+        LinearLayout center = new LinearLayout(this);
+        center.setOrientation(LinearLayout.HORIZONTAL);
+        center.setGravity(Gravity.CENTER);
+
+        Button drawButton = makeButton("카드 뽑기\n" + gameEngine.getDrawPileCount() + "장", Color.rgb(119, 191, 218), Color.WHITE);
+        drawButton.setEnabled(gameEngine.getCurrentPlayer() == 0 && gameEngine.getWinner() < 0);
+        drawButton.setAlpha(drawButton.isEnabled() ? 1f : 0.45f);
+        drawButton.setOnClickListener(v -> {
+            if (gameEngine != null && gameEngine.drawAndPass(0)) {
+                renderGameScreen();
+                scheduleBotTurnIfNeeded();
+            }
+        });
+        center.addView(drawButton, cardSlotParams());
+
+        Card topCard = gameEngine.getTopCard();
+        TextView top = makeText(topCard.getDisplayText(), 30, Color.rgb(70, 49, 39), true);
+        top.setGravity(Gravity.CENTER);
+        top.setBackground(roundedDrawable(cardFoodColor(topCard.getFood()), Color.rgb(118, 75, 49), 18, 2));
+        center.addView(top, cardSlotParams());
+        page.addView(center, matchWrapMargins(0, 0, 0, 12));
+
+        TextView guide = makeText(
+                "같은 음식 또는 같은 숫자/문양 카드를 내세요.\n낼 카드가 없으면 카드 뽑기를 누르세요.",
+                13,
+                Color.rgb(111, 83, 64),
+                false
+        );
+        guide.setGravity(Gravity.CENTER);
+        page.addView(guide, matchWrapMargins(0, 0, 0, 8));
+
+        TextView handLabel = makeText("내 카드 · " + gameEngine.getHandSize(0) + "장", 17, Color.rgb(85, 54, 37), true);
+        handLabel.setGravity(Gravity.CENTER_VERTICAL);
+        page.addView(handLabel, matchWrapMargins(4, 0, 0, 6));
+
+        HorizontalScrollView scroll = new HorizontalScrollView(this);
+        scroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout handRow = new LinearLayout(this);
+        handRow.setOrientation(LinearLayout.HORIZONTAL);
+        handRow.setGravity(Gravity.CENTER_VERTICAL);
+        handRow.setPadding(dp(4), dp(2), dp(4), dp(4));
+
+        List<Card> hand = gameEngine.getHand(0);
+        for (int i = 0; i < hand.size(); i++) {
+            final int handIndex = i;
+            Card card = hand.get(i);
+            Button cardButton = makeButton(card.getDisplayText(), cardFoodColor(card.getFood()), Color.rgb(73, 49, 38));
+            boolean playable = gameEngine.getCurrentPlayer() == 0 && gameEngine.canPlay(card) && gameEngine.getWinner() < 0;
+            cardButton.setEnabled(gameEngine.getCurrentPlayer() == 0 && gameEngine.getWinner() < 0);
+            cardButton.setAlpha(playable ? 1f : 0.65f);
+            cardButton.setOnClickListener(v -> {
+                if (gameEngine == null || gameEngine.getCurrentPlayer() != 0) {
+                    return;
+                }
+                if (!gameEngine.canPlay(gameEngine.getHand(0).get(handIndex))) {
+                    toast("같은 음식이나 같은 숫자/문양 카드를 내야 해요 찍!");
+                    return;
+                }
+                if (gameEngine.playCard(0, handIndex)) {
+                    if (gameEngine.getWinner() >= 0) {
+                        renderGameScreen();
+                        showGameResult(gameEngine.getWinner());
+                    } else {
+                        renderGameScreen();
+                        scheduleBotTurnIfNeeded();
+                    }
+                }
+            });
+            LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(dp(76), dp(108));
+            cardLp.setMargins(dp(4), 0, dp(4), 0);
+            handRow.addView(cardButton, cardLp);
+        }
+        scroll.addView(handRow, new HorizontalScrollView.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+        page.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(118)));
+
+        TextView rules = makeText("현재 테스트판: 일반 A~K 카드 규칙 · 음식 4종", 12, Color.rgb(130, 102, 82), false);
+        rules.setGravity(Gravity.CENTER);
+        page.addView(rules, matchWrapMargins(0, 8, 0, 0));
+
+        root.addView(page, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+    }
+
+    private void clearGameOverlayOnly() {
+        while (root.getChildCount() > 1) {
+            root.removeViewAt(1);
+        }
+    }
+
+    private LinearLayout.LayoutParams cardSlotParams() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(112), dp(150));
+        lp.setMargins(dp(8), 0, dp(8), 0);
+        return lp;
+    }
+
+    private int cardFoodColor(Card.Food food) {
+        switch (food) {
+            case CHEESE:
+                return Color.rgb(255, 225, 139);
+            case BREAD:
+                return Color.rgb(243, 207, 161);
+            case SAUSAGE:
+                return Color.rgb(249, 174, 172);
+            case COOKIE:
+            default:
+                return Color.rgb(209, 191, 235);
+        }
+    }
+
+    private void scheduleBotTurnIfNeeded() {
+        if (state != STATE_GAME || gameEngine == null || gameEngine.getWinner() >= 0) {
+            return;
+        }
+        if (gameEngine.getCurrentPlayer() == 0 || botTurnScheduled) {
+            return;
+        }
+
+        botTurnScheduled = true;
+        handler.postDelayed(() -> {
+            botTurnScheduled = false;
+            if (state != STATE_GAME || gameEngine == null || gameEngine.getWinner() >= 0) {
+                return;
+            }
+
+            int bot = gameEngine.getCurrentPlayer();
+            if (bot == 0) {
+                renderGameScreen();
+                return;
+            }
+
+            int playable = gameEngine.findFirstPlayableIndex(bot);
+            if (playable >= 0) {
+                gameEngine.playCard(bot, playable);
+            } else {
+                gameEngine.drawAndPass(bot);
+            }
+
+            renderGameScreen();
+            if (gameEngine.getWinner() >= 0) {
+                showGameResult(gameEngine.getWinner());
+            } else {
+                scheduleBotTurnIfNeeded();
+            }
+        }, 650);
+    }
+
+    private void showGameResult(int winner) {
+        final Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(false);
+
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setGravity(Gravity.CENTER);
+        panel.setPadding(dp(28), dp(24), dp(28), dp(22));
+        panel.setBackground(roundedDrawable(Color.rgb(255, 249, 235), Color.rgb(215, 157, 85), 24, 2));
+
+        String resultTitle = winner == 0 ? "승리! 찍~! 🎉" : "이번 판은 P" + (winner + 1) + " 승리!";
+        TextView title = makeText(resultTitle, 26, Color.rgb(91, 50, 31), true);
+        title.setGravity(Gravity.CENTER);
+        panel.addView(title, matchWrapMargins(0, 0, 0, 12));
+
+        TextView message = makeText(
+                winner == 0 ? "내 카드를 모두 내려놓았어요!" : "다음 판에는 더 빠르게 카드를 내려봐요 찍!",
+                16,
+                Color.rgb(112, 78, 57),
+                false
+        );
+        message.setGravity(Gravity.CENTER);
+        panel.addView(message, matchWrapMargins(0, 0, 0, 16));
+
+        Button lobby = makeButton("멀티플레이 로비로", Color.rgb(243, 133, 144), Color.WHITE);
+        lobby.setOnClickListener(v -> {
+            dialog.dismiss();
+            showCurrentLobby();
+        });
+        panel.addView(lobby, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)));
+
+        dialog.setContentView(panel);
+        dialog.show();
+        Window w = dialog.getWindow();
+        if (w != null) {
+            w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            w.setDimAmount(0.5f);
+            w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            w.setLayout((int) (getResources().getDisplayMetrics().widthPixels * 0.84f), WindowManager.LayoutParams.WRAP_CONTENT);
+        }
     }
 
     private void addHotspot(float x, float y, float w, float h, View.OnClickListener listener) {
@@ -481,7 +739,9 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (state == STATE_WAITING) {
+        if (state == STATE_GAME) {
+            showCurrentLobby();
+        } else if (state == STATE_WAITING) {
             showCurrentLobby();
         } else if (state == STATE_LOBBY) {
             showHome();

@@ -26,7 +26,7 @@
 
 - Android 앱 버전: `0.3.1`
 - `versionCode 4`
-- GitHub Actions 실빌드 검증 예정
+- 최종 고해상도 PNG 5장 포함 GitHub Actions Build #27 실빌드 성공
 
 ## Android 기준
 

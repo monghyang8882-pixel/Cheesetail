@@ -43,8 +43,8 @@ jobs:
           set -euxo pipefail
           BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
           UNSIGNED="app/build/outputs/apk/release/app-release-unsigned.apk"
-          ALIGNED="app/build/outputs/apk/release/CheeseTail-v0.3.3-aligned.apk"
-          SIGNED="app/build/outputs/apk/release/CheeseTail-v0.3.3-Android16.apk"
+          ALIGNED="app/build/outputs/apk/release/CheeseTail-aligned.apk"
+          SIGNED="app/build/outputs/apk/release/CheeseTail-Android16.apk"
           REPORT="app/build/outputs/apk/release/verification.txt"
 
           keytool -genkeypair -noprompt \
@@ -96,6 +96,6 @@ jobs:
         with:
           name: cheesetail-android16-apk
           path: |
-            app/build/outputs/apk/release/CheeseTail-v0.3.3-Android16.apk
+            app/build/outputs/apk/release/CheeseTail-Android16.apk
             app/build/outputs/apk/release/verification.txt
           if-no-files-found: error

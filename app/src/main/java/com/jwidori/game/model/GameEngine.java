@@ -31,11 +31,18 @@ public class GameEngine {
             }
         }
 
+        drawPile.add(Card.hideJoker());
+        drawPile.add(Card.flashJoker());
+        drawPile.add(Card.catchJoker());
+
         Collections.shuffle(drawPile, random);
 
         for (int c = 0; c < cardsPerPlayer; c++) {
             for (int p = 0; p < playerCount; p++) {
-                hands.get(p).add(drawOne());
+                Card dealt = drawOne();
+                if (dealt != null) {
+                    hands.get(p).add(dealt);
+                }
             }
         }
 
@@ -47,6 +54,16 @@ public class GameEngine {
             return null;
         }
         return drawPile.remove(drawPile.size() - 1);
+    }
+
+    private void drawCards(int player, int count) {
+        for (int i = 0; i < count; i++) {
+            Card card = drawOne();
+            if (card == null) {
+                return;
+            }
+            hands.get(player).add(card);
+        }
     }
 
     public int getPlayerCount() {
@@ -102,8 +119,32 @@ public class GameEngine {
             return true;
         }
 
-        advanceTurn();
+        applyCardEffect(card, player);
         return true;
+    }
+
+    private void applyCardEffect(Card card, int player) {
+        switch (card.getKind()) {
+            case HIDE:
+                currentPlayer = player;
+                break;
+            case FLASH: {
+                int target = nextPlayer(player);
+                drawCards(target, 3);
+                currentPlayer = nextPlayer(target);
+                break;
+            }
+            case CATCH: {
+                int target = nextPlayer(player);
+                drawCards(target, 5);
+                currentPlayer = nextPlayer(target);
+                break;
+            }
+            case NORMAL:
+            default:
+                currentPlayer = nextPlayer(player);
+                break;
+        }
     }
 
     public boolean drawAndPass(int player) {
@@ -114,7 +155,7 @@ public class GameEngine {
         if (card != null) {
             hands.get(player).add(card);
         }
-        advanceTurn();
+        currentPlayer = nextPlayer(player);
         return true;
     }
 
@@ -128,7 +169,7 @@ public class GameEngine {
         return -1;
     }
 
-    private void advanceTurn() {
-        currentPlayer = (currentPlayer + 1) % playerCount;
+    private int nextPlayer(int player) {
+        return (player + 1) % playerCount;
     }
 }

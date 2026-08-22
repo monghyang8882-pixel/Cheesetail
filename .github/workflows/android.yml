@@ -16,22 +16,86 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle 8.7
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android 16 SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Set up Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.7'
+          gradle-version: '8.13'
 
-      - name: Build debug APK
-        run: gradle :app:assembleDebug --stacktrace
+      - name: Build unsigned release APK
+        run: gradle :app:assembleRelease --stacktrace
 
-      - name: Upload APK artifact
+      - name: Align and sign Android 16 APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
+          UNSIGNED="app/build/outputs/apk/release/app-release-unsigned.apk"
+          ALIGNED="app/build/outputs/apk/release/CheeseTail-v0.3.3-aligned.apk"
+          SIGNED="app/build/outputs/apk/release/CheeseTail-v0.3.3-Android16.apk"
+          REPORT="app/build/outputs/apk/release/verification.txt"
+
+          keytool -genkeypair -noprompt \
+            -keystore /tmp/cheesetail-install.keystore \
+            -storepass cheesetail123 \
+            -keypass cheesetail123 \
+            -alias cheesetail \
+            -keyalg RSA \
+            -keysize 3072 \
+            -validity 10000 \
+            -dname "CN=CheeseTail Install,O=CheeseTail,C=KR"
+
+          "$BUILD_TOOLS/zipalign" -P 16 -f -v 4 "$UNSIGNED" "$ALIGNED"
+
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks /tmp/cheesetail-install.keystore \
+            --ks-key-alias cheesetail \
+            --ks-pass pass:cheesetail123 \
+            --key-pass pass:cheesetail123 \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --v4-signing-enabled false \
+            --out "$SIGNED" \
+            "$ALIGNED"
+
+          {
+            echo "=== ZIP TEST ==="
+            unzip -t "$SIGNED"
+            echo
+            echo "=== ZIPALIGN 16K CHECK ==="
+            "$BUILD_TOOLS/zipalign" -c -P 16 -v 4 "$SIGNED"
+            echo
+            echo "=== APK SIGNATURE CHECK ==="
+            "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$SIGNED"
+            echo
+            echo "=== APK BADGING ==="
+            "$BUILD_TOOLS/aapt" dump badging "$SIGNED"
+            echo
+            echo "=== NATIVE LIBRARIES ==="
+            unzip -l "$SIGNED" | grep -E 'lib/.+\\.so$' || echo "No native .so libraries"
+            echo
+            echo "=== SHA256 ==="
+            sha256sum "$SIGNED"
+          } | tee "$REPORT"
+
+      - name: Upload verified APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: cheesetail-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: cheesetail-android16-apk
+          path: |
+            app/build/outputs/apk/release/CheeseTail-v0.3.3-Android16.apk
+            app/build/outputs/apk/release/verification.txt
           if-no-files-found: error

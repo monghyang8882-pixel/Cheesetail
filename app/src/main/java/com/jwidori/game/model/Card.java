@@ -65,7 +65,10 @@ public class Card {
     }
 
     public Food getFood() {
-        return food;
+        // Joker cards intentionally have no food suit. The current game UI uses
+        // this value only to choose a background color, so return a safe visual
+        // fallback instead of exposing null and crashing in switch(food).
+        return food != null ? food : Food.COOKIE;
     }
 
     public String getRank() {

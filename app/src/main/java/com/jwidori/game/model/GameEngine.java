@@ -1,5 +1,6 @@
 package com.jwidori.game.model;
 
+import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -87,7 +88,24 @@ public class GameEngine {
     }
 
     public List<Card> getHand(int player) {
-        return Collections.unmodifiableList(hands.get(player));
+        final List<Card> hand = hands.get(player);
+        // UI button callbacks may arrive after a previous tap already changed the
+        // hand. Return a read-only safe view so a stale index resolves to null
+        // instead of throwing IndexOutOfBoundsException and terminating the app.
+        return new AbstractList<Card>() {
+            @Override
+            public Card get(int index) {
+                if (index < 0 || index >= hand.size()) {
+                    return null;
+                }
+                return hand.get(index);
+            }
+
+            @Override
+            public int size() {
+                return hand.size();
+            }
+        };
     }
 
     public int getHandSize(int player) {

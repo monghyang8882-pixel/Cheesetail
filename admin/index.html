@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#fff7e7">
+  <title>쥐돌이게임 관리자</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif;background:#fff7e7;color:#59341f}header{padding:16px 20px;background:#fffdf7;border-bottom:1px solid #ead5b4;position:sticky;top:0;z-index:3}.brand{max-width:1100px;margin:auto;display:flex;align-items:center;gap:12px}.logo{width:46px;height:46px;border-radius:50%;background:#ffe5bd;display:grid;place-items:center;font-size:28px;border:2px solid #e7b45f}.brand h1{font-size:21px;margin:0}.sub,.muted{font-size:12px;color:#8d735f}.wrap{max-width:1100px;margin:auto;padding:18px}.login{max-width:420px;margin:8vh auto;background:#fff;border:1px solid #ecd7b6;border-radius:22px;padding:26px;box-shadow:0 12px 35px #72501e18}.statusline{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:12px;background:#eef8e9;color:#46783d;font-size:12px;margin:10px 0 14px}.dot{width:9px;height:9px;border-radius:50%;background:#6db25e}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}.card{background:#fffdf9;border:1px solid #ecd7b6;border-radius:20px;padding:17px;box-shadow:0 8px 24px #72501e10}.stat{grid-column:span 3}.wide{grid-column:span 8}.side{grid-column:span 4}.full{grid-column:1/-1}.stat b{display:block;font-size:31px;margin:6px 0}h2{font-size:17px;margin:0 0 13px}input,textarea{width:100%;border:1px solid #dfc6a4;border-radius:12px;padding:12px;font:inherit;background:#fff;color:#59341f}textarea{min-height:90px;resize:vertical}button{border:0;border-radius:12px;padding:11px 14px;font:inherit;font-weight:800;cursor:pointer}.primary{background:#ef8b9c;color:white}.soft{background:#f5e9d8;color:#5a3823}.row{display:flex;gap:10px;align-items:center}.row>*{flex:1}.toggle{display:flex;justify-content:space-between;align-items:center;background:#fff6e7;padding:12px;border-radius:13px}.toggle input{width:auto;transform:scale(1.35)}.notice{border:1px solid #ead8bd;border-radius:14px;padding:12px;margin:8px 0;background:white}.notice h3{font-size:14px;margin:0 0 4px}.notice p{font-size:13px;color:#755d4b;white-space:pre-wrap;margin:0}.pill{display:inline-block;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:800}.on{background:#e4f4dd;color:#3b7731}.off{background:#eee;color:#666}.warn{background:#ffe2c9;color:#9a561b}.hidden{display:none!important}.errorbox{display:none;padding:10px 12px;margin-top:10px;border-radius:12px;background:#ffe5e5;color:#9c3333;font-size:12px;white-space:pre-wrap}table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:9px;border-bottom:1px solid #eee0cc;text-align:left}th{color:#8d735f}.toast{position:fixed;right:18px;bottom:18px;background:#57321f;color:#fff;padding:11px 14px;border-radius:11px;opacity:0;transition:.2s;z-index:10;pointer-events:none}.toast.show{opacity:1}@media(max-width:800px){.stat{grid-column:span 6}.wide,.side{grid-column:1/-1}}@media(max-width:480px){.wrap{padding:12px}.login{margin:5vh auto;padding:20px}.stat{grid-column:1/-1}.row{flex-direction:column;align-items:stretch}.brand h1{font-size:18px}}
+  </style>
+</head>
+<body>
+<header><div class="brand"><div class="logo">🐭</div><div><h1>쥐돌이게임 운영센터</h1><div class="sub">실시간 운영 설정 · 공지 · 게임 세션</div></div></div></header>
+<main class="wrap">
+  <section id="login" class="login">
+    <h2>관리자 로그인</h2>
+    <div class="statusline"><span class="dot"></span><span>관리자 웹페이지 정상 연결</span></div>
+    <p class="muted">발급된 관리자 키를 입력하세요. 키는 이 브라우저에만 저장됩니다.</p>
+    <input id="token" type="password" autocomplete="current-password" placeholder="CTADM-...">
+    <div style="height:10px"></div>
+    <button class="primary" style="width:100%" id="loginButton">접속</button>
+    <div id="loginError" class="errorbox"></div>
+  </section>
+
+  <section id="app" class="hidden">
+    <div class="grid">
+      <div class="card stat"><span class="muted">진행중</span><b id="active">0</b><span class="muted">세션</span></div>
+      <div class="card stat"><span class="muted">오늘 시작</span><b id="today">0</b><span class="muted">세션</span></div>
+      <div class="card stat"><span class="muted">오늘 종료</span><b id="finished">0</b><span class="muted">게임</span></div>
+      <div class="card stat"><span class="muted">평균 인원</span><b id="avg">-</b><span class="muted">명</span></div>
+
+      <div class="card wide">
+        <h2>게임 운영 설정</h2>
+        <div class="toggle"><div><b>점검 모드</b><div class="muted">켜면 게임 시작을 제한하고 점검 안내를 표시합니다.</div></div><input id="maintenance" type="checkbox"></div>
+        <div style="height:10px"></div>
+        <label class="muted">점검 메시지</label><input id="message">
+        <div style="height:10px"></div>
+        <div class="row">
+          <div><label class="muted">시작 카드 수</label><input id="cards" type="number" min="3" max="15"></div>
+          <div><label class="muted">봇 턴 지연(ms)</label><input id="delay" type="number" min="200" max="5000"></div>
+        </div>
+        <div style="height:12px"></div><button class="primary" id="saveConfigButton">설정 저장</button>
+      </div>
+
+      <div class="card side">
+        <h2>새 공지</h2><input id="nt" placeholder="제목"><div style="height:8px"></div><textarea id="nb" placeholder="내용"></textarea><div style="height:8px"></div><button class="primary" style="width:100%" id="addNoticeButton">등록</button>
+      </div>
+
+      <div class="card wide"><div class="row"><h2 style="flex:1">공지사항</h2><button class="soft" style="flex:0 0 auto" id="refreshButton">새로고침</button></div><div id="notices"></div></div>
+      <div class="card side"><h2>운영 상태</h2><div id="state"></div><div style="height:12px"></div><button class="soft" style="width:100%" id="logoutButton">로그아웃</button></div>
+      <div class="card full"><h2>최근 게임 세션</h2><div style="overflow:auto"><table><thead><tr><th>시작</th><th>앱 버전</th><th>인원</th><th>상태</th><th>승자</th></tr></thead><tbody id="sessions"></tbody></table></div></div>
+      <div class="card full"><h2>관리 로그</h2><div id="logs" class="muted"></div></div>
+    </div>
+  </section>
+</main>
+<div id="toast" class="toast"></div>
+<script>
+(function(){
+  'use strict';
+  var API='https://asyboezbqabmzsyumopo.supabase.co/functions/v1/cheesetail-admin-v2';
+  var KEY=localStorage.getItem('ct_admin')||'';
+  function q(id){return document.getElementById(id)}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]})}
+  function toast(s){q('toast').textContent=s;q('toast').classList.add('show');setTimeout(function(){q('toast').classList.remove('show')},1700)}
+  function errorBox(message){var el=q('loginError');el.textContent=message||'';el.style.display=message?'block':'none'}
+  async function request(action,data){
+    var method=action==='dashboard'?'GET':'POST';
+    var options={method:method,headers:{'content-type':'application/json','x-admin-token':KEY}};
+    if(method==='POST') options.body=JSON.stringify(data||{});
+    var r;
+    try{r=await fetch(API+'?api='+encodeURIComponent(action),options)}catch(err){throw new Error('관리자 서버에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.')}
+    var body={}; try{body=await r.json()}catch(_){throw new Error('관리자 서버 응답 형식이 올바르지 않습니다.')}
+    if(r.status===401) throw new Error('관리자 키가 올바르지 않습니다.');
+    if(!r.ok) throw new Error(body.error||('서버 오류 '+r.status));
+    return body;
+  }
+  async function loadDashboard(){
+    var d=await request('dashboard'); var c=d.config||{};
+    q('maintenance').checked=!!c.maintenance_mode; q('message').value=c.maintenance_message||''; q('cards').value=c.starting_cards||7; q('delay').value=c.bot_turn_delay_ms||650;
+    q('active').textContent=d.stats&&d.stats.active!=null?d.stats.active:0; q('today').textContent=d.stats&&d.stats.today!=null?d.stats.today:0; q('finished').textContent=d.stats&&d.stats.finished!=null?d.stats.finished:0; q('avg').textContent=d.stats&&d.stats.avg?d.stats.avg:'-';
+    q('state').innerHTML='<span class="pill '+(c.maintenance_mode?'warn':'on')+'">'+(c.maintenance_mode?'점검중':'정상 운영')+'</span><p class="muted">최근 변경 '+(c.updated_at?new Date(c.updated_at).toLocaleString():'-')+'</p>';
+    var notices=d.announcements||[]; q('notices').innerHTML=notices.length?notices.map(function(n){return '<div class="notice"><div class="row"><div><h3>'+esc(n.title)+'</h3><p>'+esc(n.body)+'</p></div><div style="flex:0 0 auto"><span class="pill '+(n.enabled?'on':'off')+'">'+(n.enabled?'ON':'OFF')+'</span><br><button class="soft notice-toggle" style="margin-top:5px" data-id="'+Number(n.id)+'" data-enabled="'+(!n.enabled)+'">'+(n.enabled?'숨김':'게시')+'</button></div></div></div>'}).join(''):'<span class="muted">공지 없음</span>';
+    Array.prototype.forEach.call(document.querySelectorAll('.notice-toggle'),function(btn){btn.addEventListener('click',async function(){try{await request('toggle_notice',{id:Number(btn.dataset.id),enabled:btn.dataset.enabled==='true'});toast('공지 상태 변경');await loadDashboard()}catch(e){toast(e.message)}})});
+    var sessions=d.sessions||[]; q('sessions').innerHTML=sessions.length?sessions.map(function(s){return '<tr><td>'+new Date(s.started_at).toLocaleString()+'</td><td>'+esc(s.app_version)+'</td><td>'+Number(s.player_count||0)+'</td><td>'+esc(s.status)+'</td><td>'+(s.winner==null?'-':'P'+(Number(s.winner)+1))+'</td></tr>'}).join(''):'<tr><td colspan="5" class="muted">세션 없음</td></tr>';
+    var logs=d.logs||[]; q('logs').innerHTML=logs.length?logs.map(function(x){return '<div>'+new Date(x.created_at).toLocaleString()+' · '+esc(x.action)+'</div>'}).join(''):'로그 없음';
+  }
+  async function login(){
+    errorBox(''); KEY=q('token').value.trim()||KEY; if(!KEY){errorBox('관리자 키를 입력해 주세요.');return}
+    q('loginButton').disabled=true; q('loginButton').textContent='연결 중...';
+    try{await loadDashboard();localStorage.setItem('ct_admin',KEY);q('login').classList.add('hidden');q('app').classList.remove('hidden')}catch(e){localStorage.removeItem('ct_admin');KEY='';errorBox(e.message)}finally{q('loginButton').disabled=false;q('loginButton').textContent='접속'}
+  }
+  function logout(){localStorage.removeItem('ct_admin');KEY='';q('token').value='';q('app').classList.add('hidden');q('login').classList.remove('hidden');errorBox('')}
+  q('loginButton').addEventListener('click',login); q('token').addEventListener('keydown',function(e){if(e.key==='Enter')login()}); q('logoutButton').addEventListener('click',logout); q('refreshButton').addEventListener('click',function(){loadDashboard().catch(function(e){toast(e.message)})});
+  q('saveConfigButton').addEventListener('click',async function(){try{await request('save_config',{maintenance_mode:q('maintenance').checked,maintenance_message:q('message').value,starting_cards:Number(q('cards').value),bot_turn_delay_ms:Number(q('delay').value)});toast('설정 저장 완료');await loadDashboard()}catch(e){toast(e.message)}});
+  q('addNoticeButton').addEventListener('click',async function(){var title=q('nt').value.trim(),body=q('nb').value.trim();if(!title||!body){toast('제목과 내용을 입력하세요.');return}try{await request('add_notice',{title:title,body:body});q('nt').value='';q('nb').value='';toast('공지 등록 완료');await loadDashboard()}catch(e){toast(e.message)}});
+  if(KEY){q('token').value=KEY;login()}else{q('token').focus()}
+})();
+</script>
+</body>
+</html>

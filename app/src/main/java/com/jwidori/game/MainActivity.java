@@ -624,7 +624,7 @@ public class MainActivity extends Activity {
             } else {
                 scheduleBotTurnIfNeeded();
             }
-        }, 650);
+        }, AdminRuntime.getBotTurnDelayMs(650));
     }
 
     private void showGameResult(int winner) {

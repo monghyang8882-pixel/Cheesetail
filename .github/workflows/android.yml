@@ -37,6 +37,91 @@ jobs:
       - name: Build unsigned release APK
         run: gradle :app:assembleRelease --stacktrace
 
+      - name: Create stable development signing identity
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m pip install --disable-pip-version-check sympy cryptography
+          python <<'PY'
+          from hashlib import sha512
+          from sympy import nextprime
+          from cryptography.hazmat.primitives.asymmetric import rsa
+          from cryptography.hazmat.primitives import hashes, serialization
+          from cryptography import x509
+          from cryptography.x509.oid import NameOID
+          from cryptography.hazmat.primitives.serialization import pkcs12
+          from datetime import datetime, timezone
+          import math
+
+          seed = b'CheeseTail Android development signing identity v1'
+
+          def derive_prime(label: bytes, bits: int):
+              output = b''
+              counter = 0
+              while len(output) * 8 < bits:
+                  output += sha512(seed + label + counter.to_bytes(4, 'big')).digest()
+                  counter += 1
+              value = int.from_bytes(output[:bits // 8], 'big')
+              value |= (1 << (bits - 1)) | 1
+              return int(nextprime(value))
+
+          bits = 2048
+          half = bits // 2
+          p = derive_prime(b'p', half)
+          q = derive_prime(b'q', half)
+          if p == q:
+              q = int(nextprime(q + 2))
+          e = 65537
+          phi = (p - 1) * (q - 1)
+          while math.gcd(e, phi) != 1:
+              q = int(nextprime(q + 2))
+              phi = (p - 1) * (q - 1)
+
+          d = pow(e, -1, phi)
+          numbers = rsa.RSAPrivateNumbers(
+              p,
+              q,
+              d,
+              d % (p - 1),
+              d % (q - 1),
+              pow(q, -1, p),
+              rsa.RSAPublicNumbers(e, p * q),
+          )
+          key = numbers.private_key()
+
+          subject = x509.Name([
+              x509.NameAttribute(NameOID.COUNTRY_NAME, 'KR'),
+              x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'CheeseTail'),
+              x509.NameAttribute(NameOID.COMMON_NAME, 'CheeseTail Stable Development'),
+          ])
+
+          cert = (
+              x509.CertificateBuilder()
+              .subject_name(subject)
+              .issuer_name(subject)
+              .public_key(key.public_key())
+              .serial_number(0x4348454553455441494C01)
+              .not_valid_before(datetime(2026, 1, 1, tzinfo=timezone.utc))
+              .not_valid_after(datetime(2054, 1, 1, tzinfo=timezone.utc))
+              .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+              .sign(key, hashes.SHA256())
+          )
+
+          password = b'cheesetail-dev-2026'
+          keystore = pkcs12.serialize_key_and_certificates(
+              b'cheesetail-dev',
+              key,
+              cert,
+              None,
+              serialization.BestAvailableEncryption(password),
+          )
+          with open('/tmp/cheesetail-dev.p12', 'wb') as f:
+              f.write(keystore)
+          with open('/tmp/cheesetail-cert-sha256.txt', 'w', encoding='utf-8') as f:
+              f.write(cert.fingerprint(hashes.SHA256()).hex() + '\n')
+          PY
+          test "$(cat /tmp/cheesetail-cert-sha256.txt)" = "8191f101b64378ce486f62584ca1665585585ba1c8b301623817fd50ff845e8b"
+
       - name: Align and sign Android 16 APK
         shell: bash
         run: |
@@ -47,23 +132,14 @@ jobs:
           SIGNED="app/build/outputs/apk/release/CheeseTail-Android16.apk"
           REPORT="app/build/outputs/apk/release/verification.txt"
 
-          keytool -genkeypair -noprompt \
-            -keystore /tmp/cheesetail-install.keystore \
-            -storepass cheesetail123 \
-            -keypass cheesetail123 \
-            -alias cheesetail \
-            -keyalg RSA \
-            -keysize 3072 \
-            -validity 10000 \
-            -dname "CN=CheeseTail Install,O=CheeseTail,C=KR"
-
           "$BUILD_TOOLS/zipalign" -P 16 -f -v 4 "$UNSIGNED" "$ALIGNED"
 
           "$BUILD_TOOLS/apksigner" sign \
-            --ks /tmp/cheesetail-install.keystore \
-            --ks-key-alias cheesetail \
-            --ks-pass pass:cheesetail123 \
-            --key-pass pass:cheesetail123 \
+            --ks /tmp/cheesetail-dev.p12 \
+            --ks-type PKCS12 \
+            --ks-key-alias cheesetail-dev \
+            --ks-pass pass:cheesetail-dev-2026 \
+            --key-pass pass:cheesetail-dev-2026 \
             --v1-signing-enabled true \
             --v2-signing-enabled true \
             --v3-signing-enabled true \
@@ -72,6 +148,9 @@ jobs:
             "$ALIGNED"
 
           {
+            echo "=== STABLE SIGNING CERT SHA256 ==="
+            cat /tmp/cheesetail-cert-sha256.txt
+            echo
             echo "=== ZIP TEST ==="
             unzip -t "$SIGNED"
             echo
@@ -94,7 +173,7 @@ jobs:
       - name: Upload verified APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: cheesetail-android16-apk
+          name: cheesetail-stable-android16-apk
           path: |
             app/build/outputs/apk/release/CheeseTail-Android16.apk
             app/build/outputs/apk/release/verification.txt

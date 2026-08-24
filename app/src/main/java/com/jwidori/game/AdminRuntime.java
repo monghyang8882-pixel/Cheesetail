@@ -2,6 +2,7 @@ package com.jwidori.game;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
 
 import java.util.UUID;
 
@@ -10,6 +11,7 @@ public final class AdminRuntime {
     private static final Object LOCK = new Object();
     private static RemoteAdminClient client;
     private static String installId = "";
+    private static String appVersion = "";
     private static RemoteAdminClient.Config config = new RemoteAdminClient.Config();
     private static String activeSessionId = "";
 
@@ -19,6 +21,14 @@ public final class AdminRuntime {
         synchronized (LOCK) {
             if (client != null) return;
             client = new RemoteAdminClient();
+
+            try {
+                PackageInfo info = context.getPackageManager().getPackageInfo(context.getPackageName(), 0);
+                appVersion = info.versionName == null ? "" : info.versionName;
+            } catch (Exception ignored) {
+                appVersion = "";
+            }
+
             SharedPreferences prefs = context.getSharedPreferences("cheesetail_admin_runtime", Context.MODE_PRIVATE);
             installId = prefs.getString("install_id", "");
             if (installId == null || installId.isEmpty()) {
@@ -57,11 +67,18 @@ public final class AdminRuntime {
         }
     }
 
+    public static int getBotTurnDelayMs(int fallback) {
+        synchronized (LOCK) {
+            int value = config == null ? fallback : config.botTurnDelayMs;
+            return Math.max(200, Math.min(5000, value));
+        }
+    }
+
     public static void gameStarted(int playerCount) {
         synchronized (LOCK) {
             if (client == null) return;
             activeSessionId = UUID.randomUUID().toString();
-            client.startSession(activeSessionId, installId, BuildConfig.VERSION_NAME, playerCount);
+            client.startSession(activeSessionId, installId, appVersion, playerCount);
         }
     }
 

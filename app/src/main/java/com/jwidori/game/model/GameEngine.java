@@ -1,5 +1,7 @@
 package com.jwidori.game.model;
 
+import com.jwidori.game.AdminRuntime;
+
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -20,6 +22,7 @@ public class GameEngine {
             throw new IllegalArgumentException("playerCount must be 2-4");
         }
         this.playerCount = playerCount;
+        int effectiveCardsPerPlayer = AdminRuntime.getStartingCards(cardsPerPlayer);
 
         for (int i = 0; i < playerCount; i++) {
             hands.add(new ArrayList<>());
@@ -38,7 +41,7 @@ public class GameEngine {
 
         Collections.shuffle(drawPile, random);
 
-        for (int c = 0; c < cardsPerPlayer; c++) {
+        for (int c = 0; c < effectiveCardsPerPlayer; c++) {
             for (int p = 0; p < playerCount; p++) {
                 Card dealt = drawOne();
                 if (dealt != null) {
@@ -48,92 +51,61 @@ public class GameEngine {
         }
 
         topCard = drawOne();
+        AdminRuntime.gameStarted(playerCount);
     }
 
     private Card drawOne() {
-        if (drawPile.isEmpty()) {
-            return null;
-        }
+        if (drawPile.isEmpty()) return null;
         return drawPile.remove(drawPile.size() - 1);
     }
 
     private void drawCards(int player, int count) {
         for (int i = 0; i < count; i++) {
             Card card = drawOne();
-            if (card == null) {
-                return;
-            }
+            if (card == null) return;
             hands.get(player).add(card);
         }
     }
 
-    public int getPlayerCount() {
-        return playerCount;
-    }
-
-    public int getCurrentPlayer() {
-        return currentPlayer;
-    }
-
-    public Card getTopCard() {
-        return topCard;
-    }
-
-    public int getWinner() {
-        return winner;
-    }
-
-    public int getDrawPileCount() {
-        return drawPile.size();
-    }
+    public int getPlayerCount() { return playerCount; }
+    public int getCurrentPlayer() { return currentPlayer; }
+    public Card getTopCard() { return topCard; }
+    public int getWinner() { return winner; }
+    public int getDrawPileCount() { return drawPile.size(); }
 
     public List<Card> getHand(int player) {
         final List<Card> hand = hands.get(player);
-        // UI button callbacks may arrive after a previous tap already changed the
-        // hand. Return a read-only safe view so a stale index resolves to null
-        // instead of throwing IndexOutOfBoundsException and terminating the app.
         return new AbstractList<Card>() {
             @Override
             public Card get(int index) {
-                if (index < 0 || index >= hand.size()) {
-                    return null;
-                }
+                if (index < 0 || index >= hand.size()) return null;
                 return hand.get(index);
             }
 
             @Override
-            public int size() {
-                return hand.size();
-            }
+            public int size() { return hand.size(); }
         };
     }
 
-    public int getHandSize(int player) {
-        return hands.get(player).size();
-    }
+    public int getHandSize(int player) { return hands.get(player).size(); }
 
     public boolean canPlay(Card card) {
         return card != null && card.matches(topCard);
     }
 
     public boolean playCard(int player, int handIndex) {
-        if (winner >= 0 || player != currentPlayer) {
-            return false;
-        }
+        if (winner >= 0 || player != currentPlayer) return false;
         List<Card> hand = hands.get(player);
-        if (handIndex < 0 || handIndex >= hand.size()) {
-            return false;
-        }
+        if (handIndex < 0 || handIndex >= hand.size()) return false;
         Card card = hand.get(handIndex);
-        if (!canPlay(card)) {
-            return false;
-        }
+        if (!canPlay(card)) return false;
 
         hand.remove(handIndex);
         topCard = card;
 
         if (hand.isEmpty()) {
             winner = player;
+            AdminRuntime.gameFinished(winner);
             return true;
         }
 
@@ -166,13 +138,9 @@ public class GameEngine {
     }
 
     public boolean drawAndPass(int player) {
-        if (winner >= 0 || player != currentPlayer) {
-            return false;
-        }
+        if (winner >= 0 || player != currentPlayer) return false;
         Card card = drawOne();
-        if (card != null) {
-            hands.get(player).add(card);
-        }
+        if (card != null) hands.get(player).add(card);
         currentPlayer = nextPlayer(player);
         return true;
     }
@@ -180,9 +148,7 @@ public class GameEngine {
     public int findFirstPlayableIndex(int player) {
         List<Card> hand = hands.get(player);
         for (int i = 0; i < hand.size(); i++) {
-            if (canPlay(hand.get(i))) {
-                return i;
-            }
+            if (canPlay(hand.get(i))) return i;
         }
         return -1;
     }
